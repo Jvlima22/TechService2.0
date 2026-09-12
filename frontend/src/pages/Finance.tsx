@@ -1,0 +1,12 @@
+import React,{useState,useEffect} from 'react';
+import {Wallet,ArrowDownLeft,Clock3,CircleDollarSign} from 'lucide-react';
+import {api,money,errorText,Order} from '../lib/api';
+import {PageHead,Stat,SearchBox,Select,Loading} from '../components/Common';
+import {OrderTable} from '../components/OrderTable';
+import {toast} from 'sonner';
+export default function Finance(){
+ const [orders,setOrders]=useState<Order[]>([]),[loaded,setLoaded]=useState(false),[search,setSearch]=useState(''),[filter,setFilter]=useState('all');
+ useEffect(()=>{api.get('/orders').then(r=>{setOrders(r.data.filter((o:Order)=>!['cancelled','rejected'].includes(o.status)));setLoaded(true);}).catch(e=>toast.error(errorText(e)));},[]);
+ const paid=orders.reduce((a,o)=>a+(o.paid||0),0),total=orders.reduce((a,o)=>a+o.total,0);const filtered=orders.filter(o=>`${o.number} ${o.client_name} ${o.item}`.toLowerCase().includes(search.toLowerCase())&&(filter==='all'||(filter==='paid'?(o.paid||0)>=o.total&&o.total>0:filter==='partial'?(o.paid||0)>0&&(o.paid||0)<o.total:!o.paid)));
+ return <><PageHead title="Financeiro" description="Recebimentos e pendências, sem perder nenhum detalhe."/><div className="stats-grid"><Stat id="finance-total" label="Valor dos serviços" value={money(total)} icon={Wallet} detail="Ordens não canceladas"/><Stat id="finance-received" label="Total recebido" value={money(paid)} icon={ArrowDownLeft} tone="green" detail="Pagamentos registrados"/><Stat id="finance-pending" label="Saldo a receber" value={money(total-paid)} icon={Clock3} tone="amber" detail="Inclui orçamentos em aberto"/><Stat id="finance-partial" label="Pagamentos parciais" value={orders.filter(o=>(o.paid||0)>0&&(o.paid||0)<o.total).length} icon={CircleDollarSign} tone="violet" detail="Ordens com saldo restante"/></div><div className="filters-bar"><SearchBox id="finance-search" value={search} onChange={setSearch} placeholder="Buscar por ordem ou cliente..."/><Select id="finance-payment-filter" value={filter} onChange={(e:any)=>setFilter(e.target.value)}><option value="all">Todos os pagamentos</option><option value="paid">Pago</option><option value="partial">Parcial</option><option value="unpaid">Não pago</option></Select></div>{loaded?<OrderTable orders={filtered} finance/>:<Loading/>}</>
+}

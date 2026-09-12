@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+
+# Vercel
+.vercel/
+
+# Environment & Credentials
+.env
+.env.local
+*.pem
+credentials.json
+
+# Builds
+build/
+dist/
+
+# Logs
+*.log

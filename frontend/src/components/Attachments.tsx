@@ -1,0 +1,12 @@
+import React,{useState} from 'react';
+import {Camera,Image,Download,Trash2,Loader2} from 'lucide-react';
+import {api,errorText} from '../lib/api';
+import {Btn,IconBtn,Modal} from './Common';
+import {toast} from 'sonner';
+export const Attachments=({orderId,files,onSaved}:any)=>{
+ const [busy,setBusy]=useState(false),[preview,setPreview]=useState<any>(null);
+ const upload=async(e:any)=>{const file=e.target.files[0];if(!file)return;const fd=new FormData();fd.append('file',file);setBusy(true);try{await api.post(`/orders/${orderId}/attachments`,fd);toast.success('Foto anexada');onSaved();}catch(e){toast.error(errorText(e));}finally{setBusy(false);e.target.value='';}};
+ const open=async(f:any)=>{try{const r=await api.get(`/attachments/${f.id}`,{responseType:'blob'});setPreview({url:URL.createObjectURL(r.data),name:f.name});}catch(e){toast.error(errorText(e));}};
+ const remove=async(id:string)=>{try{await api.delete(`/attachments/${id}`);toast.success('Foto removida');onSaved();}catch(e){toast.error(errorText(e));}};
+ return <section className="detail-section"><h2 data-testid="attachments-title"><Camera size={16}/>Fotos e anexos <span className="count-pill">{files.length}</span></h2><div className="file-list">{files.map((f:any)=><div className="file-tile" key={f.id}><button data-testid={`view-attachment-${f.id}`} onClick={()=>open(f)} style={{display:'flex',alignItems:'center',gap:7}}><Image size={16}/><span>{f.name}</span></button><IconBtn testId={`delete-attachment-${f.id}`} label="Remover foto" onClick={()=>remove(f.id)}><Trash2 size={13}/></IconBtn></div>)}</div><div style={{marginTop:files.length?18:0}}><label className="file-upload-label" data-testid="photo-upload-label">{busy?<Loader2 size={15} className="spin"/>:<Camera size={15}/>}<span>{busy?'Enviando...':'Anexar foto'}</span><input data-testid="photo-upload-input" type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={upload}/></label></div><Modal open={!!preview} onClose={()=>{if(preview)URL.revokeObjectURL(preview.url);setPreview(null);}} title={preview?.name||'Foto'} id="attachment-preview">{preview&&<img data-testid="attachment-preview-image" src={preview.url} alt={preview.name} style={{width:'100%',maxHeight:'65vh',objectFit:'contain'}}/>}</Modal></section>
+};

@@ -1,0 +1,8 @@
+crons:
+  - name: notification-retry
+    description: "Reenvia notificações pendentes e devolve orçamentos expirados para revisão"
+    cron: "*/15 * * * *"
+    endpoint: "{{BASE_URL}}/api/cron/notifications"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true
