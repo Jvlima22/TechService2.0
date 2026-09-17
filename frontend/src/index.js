@@ -13,6 +13,12 @@ const queryClient = new QueryClient({
   },
 });
 
+try {
+  localStorage.removeItem("tech-service-theme");
+  document.documentElement.removeAttribute("data-theme");
+  document.documentElement.classList.remove("light-theme");
+} catch (e) {}
+
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>

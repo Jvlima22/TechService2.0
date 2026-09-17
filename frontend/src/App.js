@@ -2,7 +2,6 @@ import React from 'react';
 import {BrowserRouter,Routes,Route,Navigate,Outlet} from 'react-router-dom';
 import {Toaster} from './components/ui/sonner';
 import {SessionProvider,useSession} from './lib/session';
-import {ThemeProvider,useTheme} from './lib/theme';
 import {Loading,Btn} from './components/Common';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
@@ -24,10 +23,10 @@ function Admin(){const {session}=useSession();return session?.user.role==='admin
 function Overview(){const {session}=useSession();return session?.user.role==='admin'?<Dashboard/>:<Navigate to="/orders" replace/>;}
 class ErrorBoundary extends React.Component{state={failed:false};static getDerivedStateFromError(){return {failed:true};}render(){return this.state.failed?<div className="empty" data-testid="application-error"><h1>Não foi possível abrir esta tela.</h1><Btn testId="reload-app" onClick={()=>window.location.reload()}>Tentar novamente</Btn></div>:this.props.children;}}
 function AppContent(){
-  const {theme}=useTheme();
   return (
     <Routes>
       <Route path="/auth/:mode" element={<Auth/>}/>
+      <Route path="/auth/reset/:token" element={<Auth/>}/>
       <Route path="/p/:token" element={<PublicOrder/>}/>
       <Route element={<Private/>}>
         <Route index element={<Overview/>}/>
@@ -51,12 +50,10 @@ export default function App(){
   return (
     <ErrorBoundary>
       <BrowserRouter>
-        <ThemeProvider>
-          <SessionProvider>
-            <AppContent/>
-            <Toaster richColors position="bottom-right"/>
-          </SessionProvider>
-        </ThemeProvider>
+        <SessionProvider>
+          <AppContent/>
+          <Toaster richColors position="bottom-right"/>
+        </SessionProvider>
       </BrowserRouter>
     </ErrorBoundary>
   );

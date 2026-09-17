@@ -6,7 +6,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from pymongo.errors import DuplicateKeyError
 from core import db, Repo, uid, now, JWT_SECRET, principal, audit
-from models import Register, Login
+from models import Register, Login, ForgotPassword, ResetPassword
 from templates import TEMPLATES, template
 
 router = APIRouter(prefix='/api/auth')
@@ -59,3 +59,69 @@ async def demo():
     user = await create_company(data, True)
     await seed_demo(user)
     return await session(user)
+
+@router.post('/forgot-password')
+async def forgot_password(data: ForgotPassword):
+    import os, httpx
+    # Busca global pelo e-mail (pode existir em mais de uma empresa)
+    candidates = await db.users.find(
+        {'email': str(data.email).lower(), 'active': True}, {'_id': 0}
+    ).to_list(10)
+    # Responde sempre com sucesso para não vazar se o e-mail existe
+    if not candidates:
+        return {'ok': True}
+    user = candidates[0]
+    # Gera token JWT de reset (escopo isolado, expira em 1 hora)
+    reset_token = jwt.encode(
+        {
+            'sub': user['id'],
+            'company_id': user['company_id'],
+            'scope': 'reset',
+            'exp': datetime.now(timezone.utc) + timedelta(hours=1),
+        },
+        JWT_SECRET,
+        algorithm='HS256',
+    )
+    frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+    reset_link = f"{frontend_url}/auth/reset/{reset_token}"
+    resend_key = os.environ.get('RESEND_API_KEY', '')
+    resend_from = os.environ.get('RESEND_FROM_EMAIL', '')
+    resend_url = os.environ.get('RESEND_API_URL', 'https://api.resend.com')
+    if resend_key and resend_from:
+        async with httpx.AsyncClient(timeout=15) as http:
+            r = await http.post(
+                f"{resend_url}/emails",
+                headers={'Authorization': f'Bearer {resend_key}'},
+                json={
+                    'from': resend_from,
+                    'to': [user['email']],
+                    'subject': 'Recuperação de senha — TechService',
+                    'html': (
+                        f'<p>Olá, {user["name"]}!</p>'
+                        f'<p>Clique no link abaixo para redefinir sua senha. '
+                        f'O link expira em <strong>1 hora</strong>.</p>'
+                        f'<p><a href="{reset_link}">{reset_link}</a></p>'
+                        f'<p>Se você não solicitou a recuperação de senha, ignore este e-mail.</p>'
+                    ),
+                },
+            )
+            print("Resend status:", r.status_code)
+            print("Resend response:", r.text)
+    return {'ok': True}
+
+@router.post('/reset-password')
+async def reset_password(data: ResetPassword):
+    try:
+        payload = jwt.decode(data.token, JWT_SECRET, algorithms=['HS256'])
+        if payload.get('scope') != 'reset':
+            raise ValueError('scope inválido')
+    except Exception:
+        raise HTTPException(400, 'Link de recuperação inválido ou expirado')
+    repo = Repo({'company_id': payload['company_id']})
+    user = await repo.one('users', {'id': payload['sub'], 'active': True}, required=False)
+    if not user:
+        raise HTTPException(400, 'Usuário não encontrado ou inativo')
+    new_hash = hash_password(data.password)
+    await repo.update('users', {'id': user['id']}, {'password_hash': new_hash})
+    await audit({**user}, 'password_reset', 'Senha redefinida via link de recuperação')
+    return {'ok': True}

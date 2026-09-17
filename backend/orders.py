@@ -18,9 +18,9 @@ async def commit(repo, order, values):
     if not result.modified_count: raise HTTPException(409, 'A ordem foi atualizada. Recarregue e tente novamente.')
     return {**order, **values}
 
-async def notify(repo, order, tasks, link=''):
+async def notify(repo, order, tasks, link='', custom_text=None):
     from notifications import enqueue, process_company
-    await enqueue(repo, order, link)
+    await enqueue(repo, order, link, custom_text)
     tasks.add_task(process_company, repo.company_id)
 
 async def expire(repo, order):
@@ -104,7 +104,7 @@ async def approval_link(order_id:str,tasks:BackgroundTasks,p=Depends(require('op
     return await request_approval(repo,order,p,tasks)
 
 @router.post('/orders/{order_id}/payment')
-async def payment(order_id:str,data:Payment,p=Depends(require('finance'))):
+async def payment(order_id:str,data:Payment,tasks:BackgroundTasks,p=Depends(require('finance'))):
     repo=Repo(p); order=await repo.one('orders',{'id':order_id})
     if order['status'] in ['cancelled','rejected','open','diagnosis','awaiting']: raise HTTPException(409,'O orçamento precisa estar aprovado para registrar pagamento')
     paid=rounded(order['paid']+data.amount)
@@ -112,6 +112,8 @@ async def payment(order_id:str,data:Payment,p=Depends(require('finance'))):
     payment={'id':uid(),'amount':rounded(data.amount),'method':data.method,'at':now(),'actor':p['name']}
     new=await commit(repo,order,{'paid':paid,'payments':order.get('payments',[])+[payment]})
     await audit(p,'payment_recorded',f"Pagamento de R$ {data.amount:.2f} registrado",order_id,{'before':order['paid'],'after':paid})
+    saldo_pendente = new['total'] - new['paid']
+    await notify(repo, new, tasks, custom_text=f"Recebemos um pagamento de R$ {data.amount:.2f} referente à OS #{new['number']}. Saldo pendente: R$ {saldo_pendente:.2f}.")
     return order_view(new,p)
 
 async def resolve_public(token):

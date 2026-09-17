@@ -25,7 +25,7 @@ export const IconBtn = ({children, testId, label, ...props}: any) => (
 );
 
 export const Badge = ({status, id}: any) => (
-  <span data-testid={`status-${id}`} className={`status-badge status-${status}`}>
+  <span data-testid={`status-${id}`} className={`status-badge status-${status} ${status === 'awaiting' ? 'blink' : ''}`}>
     <i />
     {statuses[status] || status}
   </span>

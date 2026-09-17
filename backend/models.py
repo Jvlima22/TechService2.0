@@ -16,6 +16,13 @@ class Login(Input):
     password: str
     company_code: str = ''
 
+class ForgotPassword(Input):
+    email: EmailStr
+
+class ResetPassword(Input):
+    token: str
+    password: str = Field(min_length=8, max_length=64)
+
 class ClientInput(Input):
     name: str = Field(min_length=2, max_length=100)
     email: EmailStr | Literal[''] = ''

@@ -153,11 +153,19 @@ export default function Layout(){
    <aside className={`sidebar${mobile?' sidebar-open':''}`}>
     <Link to="/" className="brand" data-testid="brand-link">
      <img className="brand-logo" src="/branding/tech-service-dark.png" alt="Tech Service"/>
-     {!collapsed&&<div>tech<span>service</span><small>WORKSPACE</small></div>}
+     {!collapsed&&(
+       <div className="brand-text">
+         <div className="brand-title">
+           <strong className="brand-tech">tech</strong>
+           <span className="brand-service">service</span>
+         </div>
+         <small>WORKSPACE</small>
+       </div>
+     )}
     </Link>
     {!collapsed&&(
      <button className="company-switch" data-testid="company-settings-link" onClick={()=>{window.location.href=isAdmin?'/settings':'/orders';}}>
-      <div className="company-avatar">TF</div>
+      <img src="/logo-alt.png" className="company-avatar" style={{objectFit: 'contain', backgroundColor: 'transparent'}} alt="TGL Solutions" />
       <div><strong>{session.company.name}</strong><span>{session.template.name}</span></div>
       <ChevronsUpDown size={15}/>
      </button>

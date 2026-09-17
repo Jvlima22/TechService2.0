@@ -13,7 +13,7 @@ def configured(channel):
     keys=['TWILIO_ACCOUNT_SID','TWILIO_AUTH_TOKEN','TWILIO_WHATSAPP_FROM','TWILIO_CONTENT_SID'] if channel=='whatsapp' else ['RESEND_API_KEY','RESEND_FROM_EMAIL']
     return all(os.environ.get(k) for k in keys)
 
-async def enqueue(repo,order,link=''):
+async def enqueue(repo,order,link='',custom_text=None):
     company=await repo.one('companies');client=await repo.one('clients',{'id':order['client_id']})
     for channel in ['whatsapp','email']:
         recipient=client.get('phone' if channel=='whatsapp' else 'email','')
@@ -22,7 +22,8 @@ async def enqueue(repo,order,link=''):
         if not recipient: reason='Cliente sem telefone' if channel=='whatsapp' else 'Cliente sem e-mail'
         if channel=='whatsapp' and not client.get('whatsapp_consent'): reason='WhatsApp sem consentimento do cliente'
         if company.get('demo'): reason='Ambiente de demonstração: envio externo desativado'
-        await repo.insert('notifications',{'order_id':order['id'],'channel':channel,'recipient':recipient,'state':'not_configured' if reason else 'pending','error':reason,'attempts':0,'next_attempt':now(),'order_number':order['number'],'order_status':order['status'],'text':f"{company['name']}: OS #{order['number']} — {STATUSES[order['status']]}. {link}",'link':link,'client_name':client['name']})
+        text = custom_text or f"{company['name']}: OS #{order['number']} — {STATUSES[order['status']]}. {link}"
+        await repo.insert('notifications',{'order_id':order['id'],'channel':channel,'recipient':recipient,'state':'not_configured' if reason else 'pending','error':reason,'attempts':0,'next_attempt':now(),'order_number':order['number'],'order_status':order['status'],'text':text,'link':link,'client_name':client['name']})
 
 async def send(notification):
     n=notification
