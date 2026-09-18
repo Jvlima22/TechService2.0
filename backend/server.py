@@ -33,7 +33,8 @@ async def lifespan(app):
     client.close()
 
 app=FastAPI(title='Tech Service API',lifespan=lifespan)
-app.add_middleware(CORSMiddleware,allow_origins=os.environ['CORS_ORIGINS'].split(','),allow_credentials=False,allow_methods=['GET','POST','PUT','DELETE','OPTIONS'],allow_headers=['Authorization','Content-Type'])
+cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000,https://techservice-tgl.vercel.app').split(',')
+app.add_middleware(CORSMiddleware,allow_origins=[origin.strip() for origin in cors_origins if origin.strip()],allow_credentials=False,allow_methods=['GET','POST','PUT','DELETE','OPTIONS'],allow_headers=['Authorization','Content-Type'])
 
 @app.middleware('http')
 async def auth_rate_limit(request:Request,call_next):
