@@ -101,3 +101,45 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+## user_problem_statement: Implementar a estratégia de pagamentos nos arquivos existentes do TechService, sem criar telas paralelas.
+## frontend:
+##   - task: "Integração de recebimentos na Settings e no detalhe da OS"
+##     implemented: true
+##     working: "partially-verified"
+##     file: "frontend/src/pages/Settings.tsx, frontend/src/pages/OrderDetail.tsx"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       - working: "partially-verified"
+##         agent: "main"
+##         comment: "Pix direto, gateway, geração de cobrança e confirmação manual integrados às telas existentes; parser Babel validou os arquivos TSX. Build CRACO no volume Windows encerrou com código 137 por ambiente/memória."
+## backend:
+##   - task: "Configuração Pix/gateway e payload Pix dinâmico"
+##     implemented: true
+##     working: true
+##     file: "backend/models.py, backend/data_routes.py, backend/orders.py"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##       - working: true
+##         agent: "main"
+##         comment: "py_compile passou; endpoints payment-settings e orders/{id}/pix adicionados, preservando Asaas e webhooks existentes."
+## metadata:
+##   created_by: "main_agent"
+##   version: "1.1"
+##   test_sequence: 1
+##   run_ui: false
+## test_plan:
+##   current_focus:
+##     - "Confirmar build do frontend em ambiente com memória suficiente"
+##     - "Testar configuração Pix e geração de cobrança com sessão autenticada"
+##   stuck_tasks:
+##     - "Build CRACO no FUSE mount do computador local"
+##   test_all: true
+##   test_priority: "high_first"
+## agent_communication:
+##   - agent: "main"
+##     message: "Correção aplicada diretamente no projeto local TechService; nenhuma nova página paralela foi criada."

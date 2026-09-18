@@ -4,8 +4,8 @@ TEMPLATES = [
     {'id':'maintenance','name':'Manutenção','item_label':'Imóvel / instalação','icon':'Wrench','fields':[{'id':'address','name':'Endereço do serviço','type':'text'},{'id':'area','name':'Área / setor','type':'text'},{'id':'type','name':'Tipo de manutenção','type':'select','options':['Preventiva','Corretiva','Instalação']}]},
     {'id':'beauty','name':'Estética e bem-estar','item_label':'Procedimento','icon':'Sparkles','fields':[{'id':'area','name':'Área de tratamento','type':'text'},{'id':'sessions','name':'Número de sessões','type':'number'},{'id':'restrictions','name':'Restrições / alergias','type':'text'}]},
 ]
-STATUSES = {'open':'Aberta','diagnosis':'Em diagnóstico','awaiting':'Aguardando aprovação','approved':'Aprovada','rejected':'Recusada','in_progress':'Em execução','completed':'Concluída','delivered':'Entregue','cancelled':'Cancelada'}
-TRANSITIONS = {'open':['diagnosis','cancelled'],'diagnosis':['awaiting','cancelled'],'awaiting':['diagnosis','cancelled'],'approved':['in_progress','cancelled'],'rejected':['diagnosis','cancelled'],'in_progress':['completed','cancelled'],'completed':['delivered','cancelled'],'delivered':[],'cancelled':[]}
+STATUSES = {'open':'Aberta','diagnosis':'Em diagnóstico','awaiting':'Aguardando aprovação','awaiting_payment':'Aguardando pagamento','approved':'Aprovada','rejected':'Recusada','paid':'Paga','in_progress':'Em execução','completed':'Pronto','delivered':'Entregue','cancelled':'Cancelada'}
+TRANSITIONS = {'open':['diagnosis','cancelled'],'diagnosis':['awaiting','cancelled'],'awaiting':['diagnosis','awaiting_payment','cancelled'],'awaiting_payment':['paid','cancelled'],'approved':['in_progress','cancelled'],'rejected':['diagnosis','cancelled'],'paid':['in_progress','cancelled'],'in_progress':['completed','cancelled'],'completed':['delivered','cancelled'],'delivered':[],'cancelled':[]}
 
 def template(niche): return next(t for t in TEMPLATES if t['id'] == niche)
 

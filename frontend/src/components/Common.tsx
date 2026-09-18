@@ -1,8 +1,8 @@
-import React from 'react';
+import React,{useEffect,useState} from 'react';
 import {Loader2, Plus, Search, ArrowUpRight, Inbox} from 'lucide-react';
 import {Button} from './ui/button';
 import {Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription} from './ui/dialog';
-import {statuses, initials} from '../lib/api';
+import {api,statuses, initials} from '../lib/api';
 
 // The dialog primitives are implemented in JavaScript. Casting the wrappers here
 // keeps the shared TypeScript components compatible with React 19 JSX children.
@@ -36,6 +36,16 @@ export const Avatar = ({name, size = '', id}: any) => (
     {initials(name)}
   </span>
 );
+
+export const UserAvatar = ({name, size = '', id}: any) => {
+  const [src,setSrc]=useState('');
+  useEffect(()=>{
+    let url='';
+    api.get('/profile/avatar',{responseType:'blob'}).then(r=>{url=URL.createObjectURL(r.data);setSrc(url);}).catch(()=>{});
+    return ()=>{if(url)URL.revokeObjectURL(url);};
+  },[]);
+  return <span data-testid={id || `user-avatar-${name}`} className={`avatar ${size}`}>{src?<img src={src} alt={`Foto de ${name}`}/>:initials(name)}</span>;
+};
 
 export const Loading = () => (
   <div className="loading" data-testid="loading-state">

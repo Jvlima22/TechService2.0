@@ -65,6 +65,7 @@ class Decision(Input):
     decision: Literal['approved','rejected']
     name: str = Field(min_length=2, max_length=100)
     reason: str = Field(default='', max_length=2000)
+    payment_method: Literal['online', 'in_store'] = 'online'
 
 class Payment(Input):
     amount: float = Field(gt=0, le=100000000)
@@ -83,6 +84,13 @@ class CustomField(Input):
 
 class CompanyInput(Input):
     name: str = Field(min_length=2, max_length=100)
+
+class PaymentSettingsInput(Input):
+    pix_key_type: Literal['cpf_cnpj','email','phone','random'] = 'cpf_cnpj'
+    pix_key: str = Field(default='', max_length=120)
+    gateway_provider: Literal['none','asaas','mercadopago','stripe'] = 'none'
+    gateway_auth_method: Literal['oauth','token'] = 'token'
+    gateway_api_key: str = Field(default='', max_length=500)
 
 class DocResponse(BaseModel):
     model_config = ConfigDict(extra='allow')

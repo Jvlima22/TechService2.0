@@ -7,6 +7,7 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, Request, Depends, HTTPException
 from core import Repo, db, uid, now, require, authorize
 from templates import STATUSES
+from email_templates import email_content
 router=APIRouter(prefix='/api')
 
 def configured(channel):
@@ -22,14 +23,16 @@ async def enqueue(repo,order,link='',custom_text=None):
         if not recipient: reason='Cliente sem telefone' if channel=='whatsapp' else 'Cliente sem e-mail'
         if channel=='whatsapp' and not client.get('whatsapp_consent'): reason='WhatsApp sem consentimento do cliente'
         if company.get('demo'): reason='Ambiente de demonstração: envio externo desativado'
-        text = custom_text or f"{company['name']}: OS #{order['number']} — {STATUSES[order['status']]}. {link}"
-        await repo.insert('notifications',{'order_id':order['id'],'channel':channel,'recipient':recipient,'state':'not_configured' if reason else 'pending','error':reason,'attempts':0,'next_attempt':now(),'order_number':order['number'],'order_status':order['status'],'text':text,'link':link,'client_name':client['name']})
+        html, text, subject = email_content(company, client, order, link, custom_text) if channel=='email' else ('', custom_text or f"{company['name']}: OS #{order['number']} — {STATUSES[order['status']]}. {link}", '')
+        await repo.insert('notifications',{'order_id':order['id'],'channel':channel,'recipient':recipient,'state':'not_configured' if reason else 'pending','error':reason,'attempts':0,'next_attempt':now(),'order_number':order['number'],'order_status':order['status'],'text':text,'html':html,'subject':subject,'link':link,'client_name':client['name']})
 
 async def send(notification):
     n=notification
     async with httpx.AsyncClient(timeout=20) as http:
         if n['channel']=='email':
-            r=await http.post(f"{os.environ['RESEND_API_URL']}/emails",headers={'Authorization':f"Bearer {os.environ['RESEND_API_KEY']}",'Idempotency-Key':n['id']},json={'from':os.environ['RESEND_FROM_EMAIL'],'to':[n['recipient']],'subject':f"Atualização da OS #{n['order_number']}",'text':n['text']})
+            payload={'from':os.environ['RESEND_FROM_EMAIL'],'to':[n['recipient']],'subject':n.get('subject') or f"Atualização da OS #{n['order_number']}",'text':n['text']}
+            if n.get('html'): payload['html']=n['html']
+            r=await http.post(f"{os.environ['RESEND_API_URL']}/emails",headers={'Authorization':f"Bearer {os.environ['RESEND_API_KEY']}",'Idempotency-Key':n['id']},json=payload)
             r.raise_for_status(); return r.json()['id'],'accepted'
         phone=''.join(x for x in n['recipient'] if x.isdigit())
         if not n['recipient'].startswith('+'): raise ValueError('Telefone precisa incluir + e código do país')

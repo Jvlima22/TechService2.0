@@ -26,6 +26,31 @@ async def storage_request(method,path,**kwargs):
             r=await http.request(method,f'{STORAGE_URL}/objects/{path}',headers={**headers,'X-Storage-Key':key},**kwargs)
         r.raise_for_status();return r
 
+@router.post('/profile/avatar')
+async def upload_profile_avatar(file:UploadFile=File(...),p=Depends(require('operate'))):
+    mime=file.content_type
+    ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}.get(mime)
+    if not ext: raise HTTPException(422,'Use uma imagem JPG, PNG ou WebP')
+    data=await file.read(5*1024*1024+1)
+    if not data or len(data)>5*1024*1024: raise HTTPException(422,'A imagem deve ter até 5 MB')
+    valid=(mime=='image/jpeg' and data.startswith(b'\xff\xd8\xff')) or (mime=='image/png' and data.startswith(b'\x89PNG\r\n\x1a\n')) or (mime=='image/webp' and data[:4]==b'RIFF' and data[8:12]==b'WEBP')
+    if not valid: raise HTTPException(422,'O conteúdo não corresponde ao formato da imagem')
+    path=f"{os.environ['STORAGE_APP_NAME']}/profiles/{p['company_id']}/{p['id']}.{ext}"
+    try: r=await storage_request('PUT',path,content=data,headers={'Content-Type':mime})
+    except Exception: raise HTTPException(503,'Armazenamento indisponível. Tente novamente.')
+    repo=Repo(p)
+    await repo.update('users',{'id':p['id']},{'profile_image_path':r.json()['path'],'profile_image_type':mime})
+    await audit(p,'profile_image_updated','Imagem de perfil atualizada')
+    return {'ok':True,'profile_image_url':'/api/profile/avatar'}
+
+@router.get('/profile/avatar')
+async def download_profile_avatar(p=Depends(require('read'))):
+    user=await Repo(p).one('users',{'id':p['id']},required=False)
+    if not user or not user.get('profile_image_path'): raise HTTPException(404,'Imagem de perfil não configurada')
+    try: r=await storage_request('GET',user['profile_image_path'])
+    except Exception: raise HTTPException(503,'Não foi possível carregar a imagem de perfil')
+    return Response(r.content,media_type=user.get('profile_image_type','image/jpeg'),headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'})
+
 @router.post('/orders/{order_id}/attachments')
 async def upload(order_id:str,file:UploadFile=File(...),p=Depends(require('operate'))):
     repo=Repo(p);await repo.one('orders',{'id':order_id})

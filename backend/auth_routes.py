@@ -11,7 +11,8 @@ from templates import TEMPLATES, template
 
 router = APIRouter(prefix='/api/auth')
 def hash_password(password): return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-def public_user(u): return {k:u[k] for k in ['id','name','email','role','company_id']}
+def public_user(u):
+    return {**{k:u[k] for k in ['id','name','email','role','company_id']}, 'profile_image_url':'/api/profile/avatar' if u.get('profile_image_path') else ''}
 async def session(user):
     token = jwt.encode({'sub':user['id'],'company_id':user['company_id'],'scope':'session','exp':datetime.now(timezone.utc)+timedelta(days=3)}, JWT_SECRET, algorithm='HS256')
     c = await Repo(user).one('companies')

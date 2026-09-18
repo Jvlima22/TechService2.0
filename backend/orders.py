@@ -7,10 +7,23 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from core import Repo, require, now, uid, audit, order_view, JWT_SECRET, authorize
 from models import OrderInput, QuoteInput, Transition, Decision, Payment
 from templates import template, validate_fields, STATUSES, TRANSITIONS
+import asaas
 
 router = APIRouter(prefix='/api')
 def rounded(value): return float(Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
 def total_quote(lines): return rounded(sum(Decimal(str(l['quantity'])) * Decimal(str(l['unit_price'])) for l in lines))
+
+def pix_tlv(tag, value):
+    value=str(value); return f'{tag}{len(value):02d}{value}'
+
+def pix_payload(key, amount, merchant='TECH SERVICE', city='SAO PAULO'):
+    merchant_info=pix_tlv('00','BR.GOV.BCB.PIX')+pix_tlv('01',key)
+    payload='000201'+pix_tlv('26',merchant_info)+'520400005303986'+pix_tlv('54',f'{amount:.2f}')+'5802BR'+pix_tlv('59',merchant[:25].upper())+pix_tlv('60',city[:15].upper())+pix_tlv('62',pix_tlv('05','***'))+'6304'
+    crc=0xFFFF
+    for byte in (payload+'0000').encode('ascii'):
+        crc ^= byte << 8
+        for _ in range(8): crc=((crc<<1)^0x1021)&0xFFFF if crc&0x8000 else (crc<<1)&0xFFFF
+    return payload[:-4]+f'{crc:04X}'
 
 async def commit(repo, order, values):
     values.update({'version':order['version']+1,'updated_at':now()})
@@ -116,6 +129,16 @@ async def payment(order_id:str,data:Payment,tasks:BackgroundTasks,p=Depends(requ
     await notify(repo, new, tasks, custom_text=f"Recebemos um pagamento de R$ {data.amount:.2f} referente à OS #{new['number']}. Saldo pendente: R$ {saldo_pendente:.2f}.")
     return order_view(new,p)
 
+@router.get('/orders/{order_id}/pix')
+async def pix_charge(order_id:str,p=Depends(require('finance'))):
+    repo=Repo(p); order=await repo.one('orders',{'id':order_id}); company=await repo.one('companies')
+    if order['status'] in ['cancelled','rejected','open','diagnosis','awaiting']: raise HTTPException(409,'A ordem precisa estar aprovada para gerar cobrança')
+    settings=company.get('payment_settings',{}); key=settings.get('pix_key','')
+    if not key: raise HTTPException(422,'Cadastre uma chave Pix em Configurações > Recebimentos')
+    amount=rounded(order['total']-order.get('paid',0))
+    if amount<=0: raise HTTPException(409,'Esta ordem já está paga')
+    return {'order_id':order_id,'number':order['number'],'amount':amount,'pix_key':key,'copy_paste':pix_payload(key,amount,company.get('name','TECH SERVICE')),'mode':'direct'}
+
 async def resolve_public(token):
     try:
         payload=jwt.decode(token,JWT_SECRET,algorithms=['HS256'],options={'verify_exp':False})
@@ -141,8 +164,40 @@ async def public_decision(token:str,data:Decision,tasks:BackgroundTasks):
     if order['status']!='awaiting' or order.get('approval_decision'): raise HTTPException(409,'Este orçamento já recebeu uma resposta')
     if data.decision=='rejected' and len(data.reason.strip())<3: raise HTTPException(422,'Informe o motivo da recusa')
     decision={'name':data.name,'decision':data.decision,'reason':data.reason,'at':now()}
-    new=await commit(repo,order,{'status':data.decision,'approval_decision':decision})
+    
+    checkout_url = None
+    new_status = data.decision
+    if data.decision == 'approved':
+        if data.payment_method == 'online':
+            try:
+                # Create dummy customer for now or retrieve if exists
+                customer = await asaas.create_customer(name=data.name, email=order.get('client_email', ''))
+                checkout = await asaas.create_checkout(
+                    customer_id=customer['id'],
+                    value=order['total'],
+                    order_id=order['id'],
+                    description=f"Ordem de Serviço #{order['number']} - {order['item']}"
+                )
+                checkout_url = checkout.get('invoiceUrl')
+                
+                # Save payment record
+                await repo.insert('payments', {
+                    'order_id': order['id'],
+                    'checkout_id': checkout['id'],
+                    'amount': order['total'],
+                    'status': 'PENDING'
+                })
+                new_status = 'awaiting_payment'
+                
+            except Exception as e:
+                print("Failed to create Asaas Checkout:", e)
+                raise HTTPException(500, 'Falha ao gerar link de pagamento')
+        else:
+            new_status = 'approved'
+
+    new=await commit(repo,order,{'status':new_status,'approval_decision':decision})
     p['name']=data.name
     await audit(p,'customer_decision',f"Orçamento {'aprovado' if data.decision=='approved' else 'recusado'} por {data.name}"+(f': {data.reason}' if data.reason else ''),order['id'])
     await notify(repo,new,tasks)
-    return {'status':new['status'],'decision':decision}
+    
+    return {'status':new['status'],'decision':decision,'checkoutUrl':checkout_url}

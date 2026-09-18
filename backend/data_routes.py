@@ -1,9 +1,10 @@
-import os
+import os, secrets, urllib.parse, httpx
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import RedirectResponse
 from pymongo.errors import DuplicateKeyError
-from core import Repo, require, audit, uid, now, order_view
-from models import ClientInput, UserInput, CustomField, CompanyInput, DocResponse
+from core import db, Repo, require, audit, uid, now, order_view
+from models import ClientInput, UserInput, CustomField, CompanyInput, PaymentSettingsInput, DocResponse
 from auth_routes import hash_password, public_user
 from templates import STATUSES
 router=APIRouter(prefix='/api')
@@ -50,6 +51,56 @@ async def custom_field(data:CustomField,p=Depends(require('settings'))):
 async def integrations(p=Depends(require('settings'))):
     from notifications import configured
     return {'whatsapp':configured('whatsapp'),'email':configured('email'),'storage':bool(os.environ.get('EMERGENT_LLM_KEY'))}
+
+@router.get('/payment-settings')
+async def payment_settings(p=Depends(require('settings'))):
+    company=await Repo(p).one('companies')
+    settings=company.get('payment_settings', {})
+    return {'pix_key_type':settings.get('pix_key_type','cpf_cnpj'),'pix_key':settings.get('pix_key',''),'gateway_provider':settings.get('gateway_provider','none'),'gateway_auth_method':settings.get('gateway_auth_method','token'),'gateway_connected':bool(settings.get('gateway_api_key') or settings.get('oauth_access_token')),'oauth_account_id':settings.get('oauth_account_id','')}
+
+@router.put('/payment-settings')
+async def update_payment_settings(data:PaymentSettingsInput,p=Depends(require('settings'))):
+    repo=Repo(p)
+    values=data.model_dump()
+    values['gateway_api_key']=values['gateway_api_key'].strip()
+    company=await repo.one('companies'); previous=company.get('payment_settings',{})
+    if not values['gateway_api_key']:
+        values['gateway_api_key']=previous.get('gateway_api_key','')
+    for key in ('oauth_access_token','oauth_refresh_token','oauth_account_id','oauth_expires_in'):
+        if key in previous: values[key]=previous[key]
+    await repo.update('companies',{}, {'payment_settings':values})
+    await audit(p,'payment_settings_updated','Configurações de recebimento atualizadas')
+    return {'pix_key_type':values['pix_key_type'],'pix_key':values['pix_key'],'gateway_provider':values['gateway_provider'],'gateway_auth_method':values['gateway_auth_method'],'gateway_connected':bool(values['gateway_api_key'] or values.get('oauth_access_token'))}
+
+@router.get('/payment-oauth/{provider}/start')
+async def payment_oauth_start(provider:str,p=Depends(require('settings'))):
+    if provider not in ('mercadopago','stripe'): raise HTTPException(400,'Este provedor não oferece OAuth neste fluxo')
+    env=os.environ; prefix='MERCADOPAGO' if provider=='mercadopago' else 'STRIPE'
+    client_id=env.get(f'{prefix}_CLIENT_ID',''); redirect_uri=env.get(f'{prefix}_OAUTH_REDIRECT_URI','')
+    if not client_id or not redirect_uri: raise HTTPException(503,f'Configure {prefix}_CLIENT_ID e {prefix}_OAUTH_REDIRECT_URI no backend')
+    state=secrets.token_urlsafe(32); await db.oauth_states.insert_one({'state':state,'provider':provider,'company_id':p['company_id'],'created_at':now()})
+    if provider=='mercadopago':
+        url='https://auth.mercadopago.com.br/authorization?'+urllib.parse.urlencode({'client_id':client_id,'response_type':'code','platform_id':'mp','redirect_uri':redirect_uri,'state':state})
+    else:
+        url='https://connect.stripe.com/oauth/authorize?'+urllib.parse.urlencode({'client_id':client_id,'response_type':'code','scope':'read_write','redirect_uri':redirect_uri,'state':state})
+    return {'authorization_url':url}
+
+@router.get('/payment-oauth/{provider}/callback')
+async def payment_oauth_callback(provider:str,code:str='',state:str='',error:str='',error_description:str=''):
+    if error: raise HTTPException(400,error_description or error)
+    if provider not in ('mercadopago','stripe') or not code or not state: raise HTTPException(400,'Callback OAuth inválido')
+    saved=await db.oauth_states.find_one_and_delete({'state':state})
+    if not saved or saved['provider']!=provider: raise HTTPException(400,'State OAuth inválido ou expirado')
+    env=os.environ; prefix='MERCADOPAGO' if provider=='mercadopago' else 'STRIPE'; redirect_uri=env.get(f'{prefix}_OAUTH_REDIRECT_URI','')
+    payload={'grant_type':'authorization_code','client_id':env.get(f'{prefix}_CLIENT_ID',''),'client_secret':env.get(f'{prefix}_CLIENT_SECRET',''),'code':code,'redirect_uri':redirect_uri}
+    token_url='https://api.mercadopago.com/oauth/token' if provider=='mercadopago' else 'https://connect.stripe.com/oauth/token'
+    async with httpx.AsyncClient(timeout=20) as client: response=await client.post(token_url,data=payload)
+    if response.status_code>=400: raise HTTPException(502,'Não foi possível concluir a autorização do provedor')
+    token=response.json(); repo=Repo({'company_id':saved['company_id']}); company=await repo.one('companies')
+    settings=company.get('payment_settings',{}); settings.update({'gateway_provider':provider,'gateway_auth_method':'oauth','oauth_access_token':token.get('access_token',''),'oauth_refresh_token':token.get('refresh_token',''),'oauth_account_id':token.get('user_id') or token.get('stripe_user_id',''),'oauth_expires_in':token.get('expires_in')})
+    await repo.update('companies',{}, {'payment_settings':settings}); await audit({'company_id':saved['company_id'],'name':'OAuth'},'payment_oauth_connected',f'{provider} conectado via OAuth')
+    frontend=os.environ.get('FRONTEND_URL','/')
+    return RedirectResponse(f"{frontend.rstrip('/')}/settings?oauth={provider}&status=connected")
 @router.get('/audit')
 async def history(p=Depends(require('audit'))): return await Repo(p).find('audit',limit=300)
 

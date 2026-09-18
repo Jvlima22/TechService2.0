@@ -11,6 +11,7 @@ from data_routes import router as data_router
 from notifications import router as notifications_router
 from storage import router as storage_router
 from payment_routes import router as payment_router
+from webhooks import router as webhooks_router
 
 logging.basicConfig(level=logging.INFO)
 
@@ -47,4 +48,4 @@ async def auth_rate_limit(request:Request,call_next):
 
 @app.get('/api/')
 async def health():return {'status':'ok','app':'Tech Service'}
-for router in [auth_router,orders_router,data_router,notifications_router,storage_router,payment_router]:app.include_router(router)
+for router in [auth_router,orders_router,data_router,notifications_router,storage_router,payment_router,webhooks_router]:app.include_router(router)

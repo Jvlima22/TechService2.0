@@ -2,7 +2,7 @@ import React,{useState,useEffect,useRef} from 'react';
 import {NavLink,Outlet,useLocation,Link} from 'react-router-dom';
 import {LayoutDashboard,ClipboardList,Users,Wallet,BarChart3,Settings,ChevronsUpDown,Bell,Search,Menu,LogOut,ShieldCheck,Command,PanelRightOpen,PanelLeftOpen,Activity,ArrowUpRight as AUR,X,User,ChevronRight,Zap} from 'lucide-react';
 import {useSession} from '../lib/session';
-import {Avatar,IconBtn} from './Common';
+import {Avatar,UserAvatar,IconBtn} from './Common';
 import {GlobalSearch} from './GlobalSearch';
 
 const navigation=[
@@ -27,7 +27,7 @@ function UserProfileDropdown({onClose,onLogout}:{onClose:()=>void,onLogout:()=>v
  const {session}=useSession();
  const isAdmin=session.user.role==='admin';
  const menuItems=[
-  ...(isAdmin?[{to:'/plans',label:'Planos & Assinatura',icon:Zap,desc:'Gerenciar plano e recursos'}]:[]),
+  ...(isAdmin?[{to:'/plans',label:'Planos',icon:Zap,desc:'Gerenciar plano e recursos'}]:[]),
   ...(isAdmin?[{to:'/settings',label:'Configurações',icon:Settings,desc:'Empresa e integrações'}]:[]),
   ...(isAdmin?[{to:'/team',label:'Equipe',icon:Users,desc:'Gerenciar membros'}]:[]),
   ...(isAdmin?[{to:'/activity',label:'Atividade',icon:Activity,desc:'Histórico de ações'}]:[]),
@@ -35,7 +35,7 @@ function UserProfileDropdown({onClose,onLogout}:{onClose:()=>void,onLogout:()=>v
  return (
   <div className="profile-dropdown">
    <div className="profile-dd-header">
-    <Avatar name={session.user.name} id="dd-user-avatar"/>
+    <UserAvatar name={session.user.name} id="dd-user-avatar"/>
     <div className="profile-dd-info">
      <strong>{session.user.name}</strong>
      <span>{isAdmin?'Administrador':'Técnico'}</span>
@@ -114,7 +114,7 @@ export default function Layout(){
  const profileRef=useRef<HTMLDivElement>(null);
  const location=useLocation();
  const isAdmin=session.user.role==='admin';
- const current=[...navigation,{to:'/team',label:'Equipe'},{to:'/plans',label:'Planos & Assinatura'},{to:'/settings',label:'Configurações'},{to:'/activity',label:'Atividade'}].find(n=>n.to==='/'?location.pathname==='/':location.pathname.startsWith(n.to));
+ const current=[...navigation,{to:'/team',label:'Equipe'},{to:'/plans',label:'Planos'},{to:'/settings',label:'Configurações'},{to:'/activity',label:'Atividade'}].find(n=>n.to==='/'?location.pathname==='/':location.pathname.startsWith(n.to));
 
  const toggleCollapsed=()=>{
   setCollapsed(prev=>{
@@ -184,7 +184,7 @@ export default function Layout(){
      <>
       <div className="nav-label management">{collapsed?'·':'GESTÃO'}</div>
       <nav>
-       <NavLink to="/plans" data-testid="nav-plans" className="nav-item" onClick={()=>setMobile(false)} title="Planos"><Zap size={19}/>{!collapsed&&'Planos & Assinatura'}</NavLink>
+       <NavLink to="/plans" data-testid="nav-plans" className="nav-item" onClick={()=>setMobile(false)} title="Planos"><Zap size={19}/>{!collapsed&&'Planos'}</NavLink>
        <NavLink to="/team" data-testid="nav-team" className="nav-item" onClick={()=>setMobile(false)} title="Equipe"><Users size={19}/>{!collapsed&&'Equipe'}</NavLink>
        <NavLink to="/settings" data-testid="nav-settings" className="nav-item" onClick={()=>setMobile(false)} title="Configurações"><Settings size={19}/>{!collapsed&&'Configurações'}</NavLink>
       </nav>
@@ -199,7 +199,7 @@ export default function Layout(){
       </div>
      )}
      <div className="user-profile">
-      <Avatar name={session.user.name} id="current-user-avatar"/>
+      <UserAvatar name={session.user.name} id="current-user-avatar"/>
       {!collapsed&&<div><strong data-testid="current-user-name">{session.user.name}</strong><span data-testid="current-user-role">{isAdmin?'Administrador':'Técnico'}</span></div>}
       {!collapsed&&<IconBtn testId="logout-button" label="Sair da conta" onClick={logout}><LogOut size={17}/></IconBtn>}
      </div>
@@ -237,8 +237,8 @@ export default function Layout(){
        </div>
       )}
       <div className="profile-wrapper" ref={profileRef}>
-       <button className={`profile-avatar-btn${profileOpen?' active':''}`} onClick={()=>setProfileOpen(o=>!o)} title="Perfil" aria-label="Menu do perfil">
-        <Avatar name={session.user.name} size="small" id="topbar-user-avatar"/>
+        <button className={`profile-avatar-btn${profileOpen?' active':''}`} onClick={()=>setProfileOpen(o=>!o)} title="Perfil" aria-label="Menu do perfil">
+        <UserAvatar name={session.user.name} size="small" id="topbar-user-avatar"/>
        </button>
        {profileOpen&&<UserProfileDropdown onClose={()=>setProfileOpen(false)} onLogout={logout}/>}
       </div>
