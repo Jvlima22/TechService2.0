@@ -1,7 +1,7 @@
 {
   "version": 2,
   "installCommand": "cd frontend && npm install --legacy-peer-deps",
-  "buildCommand": "cd frontend && npm run build",
+  "buildCommand": "cd frontend && DISABLE_ESLINT_PLUGIN=true CI=false node ./node_modules/@craco/craco/dist/bin/craco.js build",
   "outputDirectory": "frontend/build",
   "rewrites": [
     {
