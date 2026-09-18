@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-const backendUrl = process.env.REACT_APP_BACKEND_URL || '';
+const configuredBackendUrl = process.env.REACT_APP_BACKEND_URL || '';
+const backendUrl = process.env.NODE_ENV === 'production' && /localhost|127\.0\.0\.1/i.test(configuredBackendUrl)
+  ? 'https://techservice-tgl.vercel.app'
+  : configuredBackendUrl;
 export const api = axios.create({ baseURL: `${backendUrl}/api` });
 
 api.interceptors.request.use(config => {
